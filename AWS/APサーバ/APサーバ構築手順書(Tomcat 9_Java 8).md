@@ -54,6 +54,18 @@ readlink -f "$(which java)"
 ```bash
 useradd -r -m -U -s /sbin/nologin tomcat
 ```
+>コマンドの意味
+useradd：ユーザーを新しく作成するコマンド
+-r：システムユーザーとして作る（通常のログイン用ユーザーではない）
+→ サービス（Tomcatなど）を動かす用に使うことが多い
+-m：ホームディレクトリを作成する
+→ /home/tomcat みたいなのが作られる
+-U：同名のグループも一緒に作る
+→ tomcat ユーザー + tomcat グループが作られる
+-s /sbin/nologin：ログインできないシェルを指定する
+→ このユーザーでSSHログインさせない（セキュリティ的に安全）
+tomcat：作成するユーザー名
+
 
 ### 3-2. Tomcatダウンロード（最新版を選ぶ）
 Tomcat 9 の **最新版 9.0.x** を公式から確認し、tar.gz を取得する。
@@ -63,6 +75,8 @@ cd /tmp
 
 # 例：ダウンロードするバージョンを指定（都度、最新版に置換する）
 TOMCAT_VER=9.0.115
+echo $TOMCAT_VER
+(出力例) 9.0.115
 
 wget https://downloads.apache.org/tomcat/tomcat-9/v${TOMCAT_VER}/bin/apache-tomcat-${TOMCAT_VER}.tar.gz
 ls -l apache-tomcat-${TOMCAT_VER}.tar.gz
@@ -85,6 +99,8 @@ chown -h tomcat:tomcat /usr/local/tomcat
 ## 4. Tomcat設定
 
 ### 4-1. setenv.sh 作成（JAVA_HOME / メモリ）
+*何してる？*：「Tomcatを “毎回同じ条件で・安全に” 動かすための設定」
+
 ```bash
 vi /usr/local/tomcat/bin/setenv.sh
 ```
@@ -92,9 +108,24 @@ vi /usr/local/tomcat/bin/setenv.sh
 ```sh
 #!/bin/sh
 export CATALINA_HOME=/usr/local/tomcat
-export JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto
+export JAVA_HOME=/opt/amazon-corretto-8.482.08.1-linux-x64
 export JAVA_OPTS="-Xms256m -Xmx1024m -Dfile.encoding=UTF-8"
 ```
+>`export CATALINA_HOME=/usr/local/tomcat`
+　= Tomcatのインストール先を指定
+　　catalina.sh などが「Tomcat本体どこ？」を判断しやすくなる
+`export JAVA_HOME=/opt/amazon-corretto-8.482.08.1-linux-x64`
+　= Javaのインストール先を指定
+　　TomcatはJavaで動くので、ここがズレると起動失敗することがある
+`export JAVA_OPTS="..."`
+　= Tomcat（正確にはJVM）起動時のオプション設定。
+`-Xms256m`
+　= 初期メモリを256MBにする
+`-Xmx1024m`
+　= 最大メモリを1024MB（1GB）にする
+`-Dfile.encoding=UTF-8`
+　= 文字コードをUTF-8に固定（文字化け防止に役立つ）
+
 
 ```bash
 chmod 755 /usr/local/tomcat/bin/setenv.sh
@@ -115,6 +146,13 @@ vi /usr/local/tomcat/conf/server.xml
 <Host name="localhost" appBase="webapps"
       unpackWARs="false" autoDeploy="false" deployOnStartup="false">
 ```
+
+>この設定で👇を無効化してる：
+`・WARを勝手に展開しない`
+`・配置したアプリを勝手に検知して反映しない`
+`・起動時に勝手にデプロイしない（必要なら）`
+何のために？？
+`「Tomcatが勝手にアプリを載せたり更新したりしないようにして、手動で確実に管理するための設定」`
 
 ---
 
@@ -139,12 +177,18 @@ Environment=CATALINA_HOME=/usr/local/tomcat
 Environment=JAVA_HOME=/usr/lib/jvm/java-1.8.0-amazon-corretto
 Environment=CATALINA_PID=/usr/local/tomcat/temp/tomcat.pid
 
-ExecStart=/usr/local/tomcat/bin/catalina.sh start
+ExecStart=/usr/local/tomcat/bin/catalina.sh start 
+# サービス開始時に実行するコマンド
 ExecStop=/usr/local/tomcat/bin/catalina.sh stop
+# サービス停止時に実行するコマンド
+# 👆systemd が裏で catalina.sh を呼んでくれるイメージ！
 
 SuccessExitStatus=143
-TimeoutStartSec=120
+TimeoutStartSec=1
 TimeoutStopSec=120
+
+# SuccessExitStatus=143 : Tomcat停止時に 143（SIGTERM由来）で終わっても正常扱いにする → これがないと「失敗」と誤判定されることがある
+# TimeoutStartSec / TimeoutStopSec：起動・停止の待ち時間（秒）→ Tomcatは少し時間かかることあるので余裕を持たせる
 
 [Install]
 WantedBy=multi-user.target
