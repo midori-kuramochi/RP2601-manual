@@ -25,6 +25,7 @@ sudo su -
 
 ### 1-2. Apache（httpd）をインストール
 ```bash
+dnf update -y
 dnf install -y httpd
 ```
 
@@ -117,6 +118,7 @@ tail -f /var/log/httpd/error_log
 ### 6-1. バックアップを取る
 ```bash
 cp -a /etc/httpd/conf/httpd.conf /etc/httpd/conf/httpd.conf.backup.$(date +%Y%m%d-%H%M%S)
+ls /etc/httpd/conf | grep httpd.conf
 ```
 
 ### 6-2. 公開フォルダを作成
@@ -190,14 +192,17 @@ vi /etc/httpd/conf.d/redirect.conf
 
 ### 7-2. 設定内容（例）
 ```apache
-Redirect 301 /sa-mon.html http://2222/aburi.html
+Redirect 301 /sa-mon.html http://<リダイレクト先のPublicIP>/aburi.html
 ```
+※IPアドレスは、ユーザーの到達可能なIPである必要がある→PublicIP
 
 ### 7-3. 文法チェック → 反映
 ```bash
 apachectl configtest
 systemctl restart httpd
 ```
+### 7-4. ブラウザで確認
+http://webサーバのPublicIP/sa-mon.html
 
 ---
 
